@@ -183,6 +183,7 @@ export interface PredictionResult {
   tradeSetup?: TradeSetup; // New field for actionable decision
   marketCondition: 'Bullish' | 'Bearish' | 'Neutral';
   whaleAlert?: WhaleAlert;
+  aiAnalysis?: string; // Narrative from Gemini
 }
 
 export interface ChatMessage {
@@ -195,3 +196,14 @@ export interface CoinOption {
   symbol: string;
   name: string;
 }
+
+// --- AGENTIC TYPES ---
+export interface AgentLog {
+  id: string;
+  timestamp: number;
+  agent: 'TECHNICAL' | 'SENTIMENT' | 'WHALE' | 'RISK' | 'MASTER';
+  message: string;
+  status: 'processing' | 'success' | 'warning' | 'error' | 'scanning';
+}
+
+export type AgentStatus = 'idle' | 'scanning' | 'analyzing' | 'detected';

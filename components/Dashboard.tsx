@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
-import { Activity, TrendingUp, TrendingDown, BarChart2, AlertTriangle, CheckCircle, RefreshCw, Wifi, WifiOff, Info, Bell, X, ShieldAlert, Zap, Settings, Newspaper, ExternalLink, Layers, Target, Crosshair, Lock, Search, Anchor } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Activity, TrendingUp, TrendingDown, BarChart2, AlertTriangle, CheckCircle, RefreshCw, Wifi, WifiOff, Info, Bell, X, ShieldAlert, Zap, Settings, Newspaper, ExternalLink, Layers, Target, Crosshair, Lock, Search, Anchor, MousePointer2, Trash2, Cpu, Globe, Radio, Terminal } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, ReferenceLine, Label, Area, ComposedChart, Bar, Cell } from 'recharts';
-import { TrendDirection, PatternType, IndicatorSignal, AnalysisInput, PredictionResult, CoinOption, TradingMode } from '../types';
+import { TrendDirection, PatternType, IndicatorSignal, AnalysisInput, PredictionResult, CoinOption, TradingMode, AgentLog } from '../types';
 import { analyzeMarketLogic } from '../utils/predictionLogic';
 import { getMarketAnalysis, getTopCoins, fetchOrderBook } from '../services/cryptoService';
+import { generateDeepAnalysis } from '../services/geminiService';
 import BotPanel from './BotPanel';
 import OnboardingTour from './OnboardingTour';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -67,6 +68,13 @@ const Dashboard: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [useSentiment, setUseSentiment] = useState(true);
 
+  // Manual Fibonacci State
+  const [manualFib, setManualFib] = useState<{
+    isActive: boolean;
+    start: { price: number; time: string } | null;
+    end: { price: number; time: string } | null;
+  }>({ isActive: false, start: null, end: null });
+
   // Alert State
   const [rsiAlertLow, setRsiAlertLow] = useState(30);
   const [rsiAlertHigh, setRsiAlertHigh] = useState(70);
@@ -79,6 +87,12 @@ const Dashboard: React.FC = () => {
   
   // Order Book State
   const [orderBook, setOrderBook] = useState<{bids: [string, string][], asks: [string, string][]}>({ bids: [], asks: [] });
+
+  // --- AGENTIC AI STATE ---
+  const [agentLogs, setAgentLogs] = useState<AgentLog[]>([]);
+  const logContainerRef = useRef<HTMLDivElement>(null);
+  const [aiAnalysisResult, setAiAnalysisResult] = useState<string>("");
+  const [isAiThinking, setIsAiThinking] = useState(false);
 
 
   const [input, setInput] = useState<AnalysisInput>({
@@ -110,6 +124,13 @@ const Dashboard: React.FC = () => {
     }
   }, []);
 
+  // Scroll logs
+  useEffect(() => {
+      if (logContainerRef.current) {
+          logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+      }
+  }, [agentLogs]);
+
   // Fetch Coin List based on Mode
   useEffect(() => {
     const loadCoins = async () => {
@@ -128,44 +149,96 @@ const Dashboard: React.FC = () => {
     loadCoins();
   }, [tradingMode]); // Re-run when trading mode changes
 
+  const addAgentLog = (agent: AgentLog['agent'], message: string, status: AgentLog['status'] = 'processing') => {
+      setAgentLogs(prev => [...prev.slice(-15), {
+          id: Date.now().toString() + Math.random(),
+          timestamp: Date.now(),
+          agent,
+          message,
+          status
+      }]);
+  };
+
+  const runAiDeepAnalysis = async (dataInput: AnalysisInput) => {
+      setIsAiThinking(true);
+      addAgentLog('MASTER', 'Initiating Deep Multi-Model Analysis...', 'processing');
+      
+      const analysis = await generateDeepAnalysis(dataInput, tradingMode, selectedSymbol);
+      
+      setAiAnalysisResult(analysis);
+      addAgentLog('MASTER', 'Analysis Complete. Verdict Updated.', 'success');
+      setIsAiThinking(false);
+  };
+
   const fetchLiveData = async () => {
     setIsLoading(true);
-    const data = await getMarketAnalysis(selectedSymbol, tradingMode);
-    const ob = await fetchOrderBook(selectedSymbol, tradingMode);
-    setOrderBook(ob);
+    addAgentLog('TECHNICAL', `Fetching ${selectedSymbol} market data...`, 'processing');
     
-    if (data.currentPrice) {
-      const newInput = { ...input, ...data } as AnalysisInput;
-      setInput(newInput);
-      setLastUpdated(new Date());
-      
-      // Auto-analyze
-      const prediction = analyzeMarketLogic(newInput, useSentiment, tradingMode);
-      setResult(prediction);
+    const data = await getMarketAnalysis(selectedSymbol, tradingMode);
+    
+    // Simulate multi-step processing
+    setTimeout(async () => {
+        const ob = await fetchOrderBook(selectedSymbol, tradingMode);
+        setOrderBook(ob);
+        addAgentLog('TECHNICAL', `Order Book depth scanned.`, 'success');
 
-      // Check RSI Alerts
-      if (newInput.rsi >= rsiAlertHigh) {
-        setAlertActive({ type: 'high', val: newInput.rsi });
-      } else if (newInput.rsi <= rsiAlertLow) {
-        setAlertActive({ type: 'low', val: newInput.rsi });
-      } else {
-        setAlertActive(null);
-      }
-      
-      // Check Price Alerts
-      priceAlerts.forEach((alert, idx) => {
-         if ((alert.type === 'above' && newInput.currentPrice >= alert.target) || 
-             (alert.type === 'below' && newInput.currentPrice <= alert.target)) {
-             alert(`Price Alert! ${selectedSymbol} is ${alert.type} ${alert.target}`);
-             setPriceAlerts(prev => prev.filter((_, i) => i !== idx));
-         }
-      });
-      
-      if (newInput.pattern !== PatternType.NONE) {
-        setShowPatternInfo(true);
-      }
-    }
-    setIsLoading(false);
+        if (data.currentPrice) {
+          const newInput = { ...input, ...data } as AnalysisInput;
+          setInput(newInput);
+          setLastUpdated(new Date());
+          
+          addAgentLog('TECHNICAL', `Price: ${newInput.currentPrice} | RSI: ${newInput.rsi}`, newInput.rsi > 70 || newInput.rsi < 30 ? 'warning' : 'success');
+
+          // Auto-analyze
+          const prediction = analyzeMarketLogic(newInput, useSentiment, tradingMode);
+          setResult(prediction);
+          
+          // Whale Check Log
+          if (newInput.whaleAlert.isDetected) {
+              addAgentLog('WHALE', `${newInput.whaleAlert.type} DETECTED! Volume Spike.`, 'warning');
+          }
+
+          // Sentiment Check Log
+          if (newInput.sentiment) {
+             const sentStatus = newInput.sentiment.label === 'Neutral' ? 'processing' : 'success';
+             addAgentLog('SENTIMENT', `News Sentiment: ${newInput.sentiment.label} (${newInput.sentiment.score.toFixed(2)})`, sentStatus);
+          }
+
+          // Trigger Deep AI Analysis occasionally (e.g. if pattern found or on heavy volatility)
+          // For demo, we trigger it if result changes significantly or on manual request, 
+          // here we just run it if we haven't in a while or logic dictates.
+          // For this update, we will rely on the "Live Intelligence" button or periodic updates.
+          
+          // Check RSI Alerts
+          if (newInput.rsi >= rsiAlertHigh) {
+            setAlertActive({ type: 'high', val: newInput.rsi });
+            addAgentLog('RISK', `RSI OVERBOUGHT (${newInput.rsi})`, 'warning');
+          } else if (newInput.rsi <= rsiAlertLow) {
+            setAlertActive({ type: 'low', val: newInput.rsi });
+             addAgentLog('RISK', `RSI OVERSOLD (${newInput.rsi})`, 'warning');
+          } else {
+            setAlertActive(null);
+          }
+          
+          // Check Price Alerts
+          priceAlerts.forEach((alert, idx) => {
+             if ((alert.type === 'above' && newInput.currentPrice >= alert.target) || 
+                 (alert.type === 'below' && newInput.currentPrice <= alert.target)) {
+                 alert(`Price Alert! ${selectedSymbol} is ${alert.type} ${alert.target}`);
+                 addAgentLog('RISK', `Target Price Reached: ${alert.target}`, 'success');
+                 setPriceAlerts(prev => prev.filter((_, i) => i !== idx));
+             }
+          });
+          
+          if (newInput.pattern !== PatternType.NONE) {
+            setShowPatternInfo(true);
+            addAgentLog('TECHNICAL', `Pattern Identified: ${newInput.pattern}`, 'success');
+            // Trigger AI on pattern detection
+            if (!isAiThinking) runAiDeepAnalysis(newInput);
+          }
+        }
+        setIsLoading(false);
+    }, 500); // Slight delay for effect
   };
 
   useEffect(() => {
@@ -173,7 +246,7 @@ const Dashboard: React.FC = () => {
     
     if (isLive) {
       fetchLiveData(); 
-      interval = setInterval(fetchLiveData, 10000);
+      interval = setInterval(fetchLiveData, 15000); // 15s refresh for live mode
     }
 
     return () => {
@@ -184,6 +257,7 @@ const Dashboard: React.FC = () => {
   const handleAnalyze = () => {
     const prediction = analyzeMarketLogic(input, useSentiment, tradingMode);
     setResult(prediction);
+    runAiDeepAnalysis(input);
   };
 
   const handleTourComplete = () => {
@@ -193,9 +267,11 @@ const Dashboard: React.FC = () => {
 
   const refreshNews = async () => {
      setIsLoading(true);
+     addAgentLog('SENTIMENT', 'Scanning latest headlines...', 'scanning');
      const data = await getMarketAnalysis(selectedSymbol, tradingMode);
      if (data.news) {
        setInput(prev => ({ ...prev, news: data.news }));
+       addAgentLog('SENTIMENT', `Analyzed ${data.news.length} articles.`, 'success');
      }
      setIsLoading(false);
   };
@@ -206,6 +282,7 @@ const Dashboard: React.FC = () => {
       const type = price > input.currentPrice ? 'above' : 'below';
       setPriceAlerts([...priceAlerts, { target: price, type }]);
       setNewPriceAlert('');
+      addAgentLog('RISK', `Alert Set: ${type} ${price}`, 'processing');
   };
   
   const handleSymbolSearch = (e: React.FormEvent) => {
@@ -214,6 +291,8 @@ const Dashboard: React.FC = () => {
           let symbol = searchQuery.toUpperCase().trim();
           if (!symbol.endsWith('USDT')) symbol += 'USDT';
           setSelectedSymbol(symbol);
+          setAgentLogs([]); // Clear logs for new symbol
+          setAiAnalysisResult("");
           // Optionally add to local list display
           if (!coinList.some(c => c.symbol === symbol)) {
               setCoinList(prev => [{ symbol, name: `${symbol.replace('USDT', '')}/USDT` }, ...prev]);
@@ -221,8 +300,69 @@ const Dashboard: React.FC = () => {
       }
   };
 
+  // --- MANUAL FIBONACCI LOGIC ---
+  const handleChartClick = (e: any) => {
+    if (!manualFib.isActive) return;
+
+    if (e && e.activePayload && e.activePayload[0]) {
+      const clickedData = e.activePayload[0].payload;
+      
+      if (!manualFib.start) {
+        setManualFib(prev => ({ ...prev, start: { price: clickedData.price, time: clickedData.time } }));
+      } else if (!manualFib.end) {
+        setManualFib(prev => ({ ...prev, end: { price: clickedData.price, time: clickedData.time } }));
+      }
+    }
+  };
+
+  const resetManualFib = () => {
+    setManualFib({ isActive: false, start: null, end: null });
+  };
+
+  const toggleDrawFib = () => {
+    if (manualFib.isActive) {
+      // If active, just reset state but keep drawing mode on until fully reset
+      setManualFib({ isActive: false, start: null, end: null });
+    } else {
+      setManualFib({ isActive: true, start: null, end: null });
+    }
+  };
+
+  const renderManualFibLines = () => {
+    if (!manualFib.start || !manualFib.end) return null;
+
+    const startPrice = manualFib.start.price;
+    const endPrice = manualFib.end.price;
+    const diff = startPrice - endPrice;
+
+    // Standard Fib Retracement Levels
+    const levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+
+    return levels.map((level) => {
+      const priceLevel = endPrice + (diff * level);
+      return (
+        <ReferenceLine 
+          key={level} 
+          y={priceLevel} 
+          stroke="#06b6d4" 
+          strokeDasharray="4 4" 
+          strokeWidth={1}
+        >
+          <Label 
+            value={`${level} ($${priceLevel.toFixed(2)})`} 
+            position="insideRight" 
+            fill="#06b6d4" 
+            fontSize={10}
+            fontWeight="bold"
+            offset={10}
+          />
+        </ReferenceLine>
+      );
+    });
+  };
+
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 md:p-6 max-w-7xl mx-auto">
       {/* Onboarding Tour */}
       {showTour && <OnboardingTour onComplete={handleTourComplete} />}
 
@@ -240,47 +380,6 @@ const Dashboard: React.FC = () => {
           </div>
           <button onClick={() => setAlertActive(null)} className="ml-4 p-1 hover:bg-white/20 rounded-full"><X size={18} /></button>
         </div>
-      )}
-
-      {/* Whale Alert Banner */}
-      {result?.whaleAlert?.isDetected && isLive && (
-        <div className="mb-6 p-4 rounded-xl bg-blue-900/40 border border-blue-500 flex items-center justify-between animate-pulse shadow-lg shadow-blue-900/20">
-           <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-600 rounded-full">
-                 <Anchor className="text-white" size={24} />
-              </div>
-              <div>
-                 <h3 className="font-bold text-blue-300 text-lg">{t('whale_alert')}</h3>
-                 <p className="text-sm text-gray-300">{result.whaleAlert.description} ({result.whaleAlert.type})</p>
-              </div>
-           </div>
-           <div className="bg-blue-800 px-3 py-1 rounded-lg text-xs font-bold text-blue-200">
-              {result.whaleAlert.confidence} Confidence
-           </div>
-        </div>
-      )}
-
-      {/* RSI Divergence Alert Banner */}
-      {input.rsiDivergence && isLive && (
-         <div className={`mb-6 p-4 rounded-xl border flex items-center justify-between animate-bounce shadow-lg ${
-             input.rsiDivergence.type === 'Bullish' ? 'bg-green-900/40 border-green-500' : 'bg-red-900/40 border-red-500'
-         }`}>
-             <div className="flex items-center gap-3">
-                 <div className={`p-2 rounded-full ${input.rsiDivergence.type === 'Bullish' ? 'bg-green-600' : 'bg-red-600'}`}>
-                    <Zap className="text-white" size={24} />
-                 </div>
-                 <div>
-                     <h3 className={`font-bold text-lg ${input.rsiDivergence.type === 'Bullish' ? 'text-green-300' : 'text-red-300'}`}>
-                        RSI DIVERGENCE DETECTED: {input.rsiDivergence.type}
-                     </h3>
-                     <p className="text-sm text-gray-300">
-                        {input.rsiDivergence.type === 'Bullish' 
-                          ? "Price making Lower Lows while RSI makes Higher Lows. Hidden Strength!" 
-                          : "Price making Higher Highs while RSI makes Lower Highs. Hidden Weakness!"}
-                     </p>
-                 </div>
-             </div>
-         </div>
       )}
 
       <div className="mb-8 text-center">
@@ -347,7 +446,10 @@ const Dashboard: React.FC = () => {
                  <select
                    className="w-full bg-gray-900 border border-gray-600 text-white rounded-lg pl-2 pr-6 py-2 focus:outline-none focus:ring-2 focus:ring-crypto-accent appearance-none text-xs truncate"
                    value={selectedSymbol}
-                   onChange={(e) => setSelectedSymbol(e.target.value)}
+                   onChange={(e) => {
+                       setSelectedSymbol(e.target.value);
+                       setAgentLogs([]);
+                   }}
                    disabled={isCoinsLoading}
                  >
                    {isCoinsLoading ? (
@@ -376,7 +478,10 @@ const Dashboard: React.FC = () => {
            )}
            
            <button 
-             onClick={() => setIsLive(!isLive)}
+             onClick={() => {
+                 setIsLive(!isLive);
+                 if (!isLive) setAgentLogs([]); // Clear logs on start
+             }}
              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${isLive ? 'bg-crypto-accent' : 'bg-gray-600'}`}
              title="Toggle Live Mode"
            >
@@ -388,18 +493,95 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* LEFT COL: Chart & News */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-6">
           
+          {/* LIVE AGENT TERMINAL */}
+          {isLive && (
+              <div className="bg-black/80 rounded-xl border border-gray-700 p-4 font-mono text-xs shadow-2xl overflow-hidden relative">
+                  <div className="flex items-center justify-between mb-3 border-b border-gray-800 pb-2">
+                      <div className="flex items-center gap-2 text-green-400">
+                          <Terminal size={14} />
+                          <span className="font-bold tracking-wider">LIVE_AGENT_TERMINAL_v2.0</span>
+                      </div>
+                      <div className="flex gap-2">
+                         <div className="flex items-center gap-1">
+                             <span className={`w-2 h-2 rounded-full ${isLoading ? 'bg-yellow-500 animate-ping' : 'bg-gray-500'}`}></span>
+                             <span className="text-gray-500">NET_IO</span>
+                         </div>
+                         <div className="flex items-center gap-1">
+                             <span className={`w-2 h-2 rounded-full ${isAiThinking ? 'bg-blue-500 animate-ping' : 'bg-gray-500'}`}></span>
+                             <span className="text-gray-500">AI_CORE</span>
+                         </div>
+                      </div>
+                  </div>
+                  
+                  {/* Scrolling Log Area */}
+                  <div ref={logContainerRef} className="h-32 overflow-y-auto space-y-1 scrollbar-hide">
+                      {agentLogs.length === 0 && <span className="text-gray-600">Waiting for data stream...</span>}
+                      {agentLogs.map((log) => (
+                          <div key={log.id} className="flex gap-2 opacity-90 hover:opacity-100 transition-opacity">
+                              <span className="text-gray-600">[{new Date(log.timestamp).toLocaleTimeString().split(' ')[0]}]</span>
+                              <span className={`font-bold ${
+                                  log.agent === 'TECHNICAL' ? 'text-blue-400' :
+                                  log.agent === 'SENTIMENT' ? 'text-purple-400' :
+                                  log.agent === 'WHALE' ? 'text-yellow-400' :
+                                  log.agent === 'RISK' ? 'text-red-400' : 'text-green-400'
+                              }`}>
+                                  {log.agent}:
+                              </span>
+                              <span className={`${
+                                  log.status === 'warning' ? 'text-orange-300' :
+                                  log.status === 'error' ? 'text-red-500' :
+                                  'text-gray-300'
+                              }`}>
+                                  {log.message}
+                              </span>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          )}
+
           {/* Advanced Chart Area */}
           {isLive && input.historicalData && input.historicalData.length > 0 && (
             <div className="space-y-4">
               <div className="bg-crypto-card p-4 rounded-xl border border-gray-700 h-[500px] relative group" id="chart">
-                 <div className="absolute top-4 right-4 z-10">
+                 
+                 {/* Chart Header Controls */}
+                 <div className="absolute top-4 right-4 z-10 flex gap-2">
+                   {/* Manual Fib Button */}
+                   <div className="flex items-center gap-1 bg-gray-800/80 rounded-lg border border-gray-600 p-1">
+                      {manualFib.isActive || manualFib.start ? (
+                        <div className="flex items-center gap-2 px-2 text-xs text-cyan-400 animate-pulse font-bold">
+                            <span className="w-2 h-2 rounded-full bg-cyan-400"></span>
+                            {manualFib.start && !manualFib.end ? t('click_end') : manualFib.end ? t('draw_fib') : t('click_start')}
+                        </div>
+                      ) : null}
+                      
+                      <button 
+                        onClick={toggleDrawFib}
+                        className={`p-1.5 rounded hover:bg-gray-700 transition-colors ${manualFib.isActive ? 'text-cyan-400 bg-gray-700' : 'text-gray-300'}`}
+                        title={t('draw_fib')}
+                      >
+                         <MousePointer2 size={16} />
+                      </button>
+
+                      {(manualFib.start || manualFib.end) && (
+                        <button 
+                           onClick={resetManualFib}
+                           className="p-1.5 rounded hover:bg-gray-700 text-red-400 transition-colors"
+                           title={t('reset_fib')}
+                        >
+                           <Trash2 size={16} />
+                        </button>
+                      )}
+                   </div>
+
                    <button onClick={() => setShowSettings(!showSettings)} className="p-2 bg-gray-800/80 rounded-lg hover:bg-gray-700 text-gray-300 border border-gray-600 flex items-center gap-2 text-xs font-bold">
                      <Layers size={14} /> {t('settings')}
                    </button>
                    {showSettings && (
-                     <div className="absolute right-0 mt-2 w-56 bg-gray-900 border border-gray-600 rounded-lg shadow-xl p-3 text-sm z-20">
+                     <div className="absolute right-0 top-10 mt-2 w-56 bg-gray-900 border border-gray-600 rounded-lg shadow-xl p-3 text-sm z-20">
                        <h4 className="font-bold text-gray-400 mb-2 border-b border-gray-700 pb-1">Chart Layers</h4>
                        <label className="flex items-center gap-2 mb-2 cursor-pointer p-1 hover:bg-gray-800 rounded">
                          <input type="checkbox" checked={showMA} onChange={() => setShowMA(!showMA)} className="accent-blue-500" />
@@ -419,7 +601,7 @@ const Dashboard: React.FC = () => {
                        </label>
                        <label className="flex items-center gap-2 cursor-pointer p-1 hover:bg-gray-800 rounded">
                          <input type="checkbox" checked={showFib} onChange={() => setShowFib(!showFib)} className="accent-yellow-500" />
-                         Fibonacci Levels
+                         Auto Fibonacci Levels
                        </label>
                        <h4 className="font-bold text-gray-400 mt-3 mb-2 border-b border-gray-700 pb-1">Price Alerts</h4>
                         <div className="flex gap-1">
@@ -443,7 +625,12 @@ const Dashboard: React.FC = () => {
                 </div>
                 
                 <ResponsiveContainer width="100%" height="90%">
-                  <LineChart data={input.historicalData} syncId="cryptoChart">
+                  <LineChart 
+                    data={input.historicalData} 
+                    syncId="cryptoChart"
+                    onClick={handleChartClick}
+                    cursor={manualFib.isActive && !manualFib.end ? 'crosshair' : 'default'}
+                  >
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.2} />
                     <XAxis dataKey="time" stroke="#94a3b8" tick={{fontSize: 11}} />
                     <YAxis domain={['auto', 'auto']} stroke="#94a3b8" tick={{fontSize: 11}} />
@@ -474,8 +661,8 @@ const Dashboard: React.FC = () => {
                     {showMA && <Line type="monotone" dataKey="sma50" stroke="#3b82f6" strokeWidth={1.5} dot={false} name="MA 50" />}
                     {showMA && <Line type="monotone" dataKey="sma200" stroke="#f59e0b" strokeWidth={1.5} dot={false} name="MA 200" />}
 
-                    {/* Fibonacci Retracement Lines */}
-                    {showFib && input.fibLevels && (
+                    {/* Auto Fibonacci Retracement Lines */}
+                    {showFib && input.fibLevels && !manualFib.end && (
                       <>
                         <ReferenceLine y={input.fibLevels.zero} stroke="#a855f7" strokeDasharray="3 3" opacity={0.5}>
                           <Label value="High" position="insideRight" fill="#a855f7" fontSize={10} />
@@ -490,6 +677,17 @@ const Dashboard: React.FC = () => {
                            <Label value="Low" position="insideRight" fill="#a855f7" fontSize={10} />
                         </ReferenceLine>
                       </>
+                    )}
+                    
+                    {/* Manual Fibonacci Lines */}
+                    {renderManualFibLines()}
+                    
+                    {/* Manual Fib Anchor Points */}
+                    {manualFib.start && (
+                         <ReferenceLine x={manualFib.start.time} stroke="#06b6d4" strokeDasharray="2 2" />
+                    )}
+                    {manualFib.end && (
+                         <ReferenceLine x={manualFib.end.time} stroke="#06b6d4" strokeDasharray="2 2" />
                     )}
 
                     {/* RSI Divergence Line */}
@@ -531,6 +729,56 @@ const Dashboard: React.FC = () => {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Multi-Agent Status Grid (Only in Live Mode) */}
+          {isLive && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center gap-3">
+                      <div className="bg-blue-900/50 p-2 rounded-lg">
+                          <Cpu className="text-blue-400" size={18} />
+                      </div>
+                      <div>
+                          <p className="text-[10px] text-gray-400 uppercase">Technical Agent</p>
+                          <p className="text-xs font-bold text-green-400 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Active
+                          </p>
+                      </div>
+                  </div>
+                   <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center gap-3">
+                      <div className="bg-purple-900/50 p-2 rounded-lg">
+                          <Globe className="text-purple-400" size={18} />
+                      </div>
+                      <div>
+                          <p className="text-[10px] text-gray-400 uppercase">Sentiment Agent</p>
+                          <p className="text-xs font-bold text-green-400 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Active
+                          </p>
+                      </div>
+                  </div>
+                   <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center gap-3">
+                      <div className="bg-yellow-900/50 p-2 rounded-lg">
+                          <Anchor className="text-yellow-400" size={18} />
+                      </div>
+                      <div>
+                          <p className="text-[10px] text-gray-400 uppercase">Whale Agent</p>
+                          <p className="text-xs font-bold text-green-400 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Active
+                          </p>
+                      </div>
+                  </div>
+                  <div className="bg-gray-800 p-3 rounded-lg border border-gray-700 flex items-center gap-3">
+                      <div className="bg-red-900/50 p-2 rounded-lg">
+                          <ShieldAlert className="text-red-400" size={18} />
+                      </div>
+                      <div>
+                          <p className="text-[10px] text-gray-400 uppercase">Risk Agent</p>
+                          <p className="text-xs font-bold text-green-400 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span> Active
+                          </p>
+                      </div>
+                  </div>
+              </div>
           )}
 
           {/* Order Book Panel */}
@@ -609,7 +857,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         {/* RIGHT COL: Analysis Controls & Results */}
-        <div className="space-y-8">
+        <div className="space-y-6">
           {/* CONTROL PANEL */}
           <div className="bg-crypto-card p-6 rounded-xl shadow-lg border border-gray-700 relative overflow-hidden" id="indicators">
             {isLive && isLoading && !lastUpdated && (
@@ -821,6 +1069,27 @@ const Dashboard: React.FC = () => {
                 </div>
                 <p className="text-sm text-gray-300 font-medium italic border-l-2 border-crypto-primary pl-3 text-left">"{result.hausSummary}"</p>
               </div>
+
+              {/* AI Agent Deep Analysis Output */}
+              {(isLive || aiAnalysisResult) && (
+                  <div className="mb-4 bg-gray-800/80 p-3 rounded-lg border border-gray-600">
+                      <h3 className="text-xs font-bold text-blue-300 mb-1 flex items-center gap-1">
+                          <Cpu size={12}/> AGENT ANALYSIS
+                      </h3>
+                      {isAiThinking ? (
+                          <div className="flex items-center gap-2 text-xs text-gray-400">
+                             <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce"></span>
+                             Generating narrative...
+                          </div>
+                      ) : aiAnalysisResult ? (
+                          <p className="text-xs text-gray-300 leading-relaxed font-mono">
+                             {aiAnalysisResult}
+                          </p>
+                      ) : (
+                          <p className="text-xs text-gray-500 italic">Waiting for signal trigger...</p>
+                      )}
+                  </div>
+              )}
               
               {/* Execution Setup Box */}
               {result.tradeSetup && (

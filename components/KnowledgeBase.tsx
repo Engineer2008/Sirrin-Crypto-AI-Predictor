@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { BookOpen, TrendingUp, Shield, Activity } from 'lucide-react';
+import { BookOpen, TrendingUp, Shield, Activity, Fingerprint } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 
 const KnowledgeBase: React.FC = () => {
@@ -27,6 +26,11 @@ const KnowledgeBase: React.FC = () => {
         title: "Risk Management",
         icon: <Shield className="text-green-400" />,
         content: "Saita 'Stop Loss' (Daily Loss). Yi amfani da 'Diversification' (Rarraba kafa). Kada ka sa duk kudinka a coin daya."
+      },
+      {
+        title: "Humanity Protocol",
+        icon: <Fingerprint className="text-pink-400" />,
+        content: "A sybil-resistant blockchain network utilizing Proof of Humanity. It ensures one-person-one-vote and fair distribution of assets through bio-authentication."
       }
     ],
     ha: [
@@ -49,6 +53,11 @@ const KnowledgeBase: React.FC = () => {
         title: "Kula da Hadari (Risk Mgmt)",
         icon: <Shield className="text-green-400" />,
         content: "Saita 'Stop Loss'. Yi amfani da 'Diversification' (Rarraba kafa). Kada ka sa duk kudinka a coin daya."
+      },
+      {
+        title: "Humanity Protocol",
+        icon: <Fingerprint className="text-pink-400" />,
+        content: "Tsarin blockchain da ke tabbatar da cewa kowane mutum daya ne. Yana amfani da 'Proof of Humanity' don hana magudi a raba arziki."
       }
     ]
   };

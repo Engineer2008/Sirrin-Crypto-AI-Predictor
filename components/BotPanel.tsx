@@ -127,6 +127,16 @@ const BotPanel: React.FC<BotPanelProps> = ({ currentPrice, symbol }) => {
   };
 
   const handlePercentChange = (type: 'sl' | 'tp', value: string) => {
+      // Allow clearing the input (empty string)
+      if (value === '') {
+          setConfig(prev => ({
+              ...prev,
+              strategy: 'Custom',
+              [type === 'sl' ? 'slPercent' : 'tpPercent']: 0
+          }));
+          return;
+      }
+      
       const val = parseFloat(value);
       if (isNaN(val)) return;
       
@@ -191,7 +201,7 @@ const BotPanel: React.FC<BotPanelProps> = ({ currentPrice, symbol }) => {
                 <div className="relative">
                     <input 
                       type="number"
-                      value={config.tpPercent}
+                      value={config.tpPercent || ''}
                       onChange={e => handlePercentChange('tp', e.target.value)}
                       className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-sm text-white focus:border-green-500 outline-none pr-6"
                     />
@@ -206,7 +216,7 @@ const BotPanel: React.FC<BotPanelProps> = ({ currentPrice, symbol }) => {
                 <div className="relative">
                     <input 
                       type="number"
-                      value={config.slPercent}
+                      value={config.slPercent || ''}
                       onChange={e => handlePercentChange('sl', e.target.value)}
                       className="w-full bg-gray-900 border border-gray-600 rounded p-2 text-sm text-white focus:border-red-500 outline-none pr-6"
                     />

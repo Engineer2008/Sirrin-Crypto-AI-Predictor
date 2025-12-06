@@ -1,6 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { Language } from '../types';
+import { Language, AnalysisInput, TradingMode } from '../types';
 
 // Initialize Gemini AI
 // Note: In a production app, handle API keys securely.
@@ -63,4 +63,43 @@ export const askSirrinCrypto = async (prompt: string, lang: Language = 'en'): Pr
     console.error("Gemini API Error:", error);
     return lang === 'ha' ? "Matsalar Network ko API Key." : "Network error or API key missing.";
   }
+};
+
+export const generateDeepAnalysis = async (input: AnalysisInput, mode: TradingMode, symbol: string): Promise<string> => {
+    try {
+        const prompt = `
+        Act as a Senior Market Analyst Agent. Analyze this real-time technical data for ${symbol} (${mode} Market).
+        
+        Data Snapshot:
+        - Price: $${input.currentPrice} (${input.priceChange24h.toFixed(2)}% in 24h)
+        - RSI (14): ${input.rsi}
+        - Trend: ${input.trend}
+        - MA Signal: ${input.movingAverageSignal}
+        - Pattern: ${input.pattern}
+        - Whale Alert: ${input.whaleAlert.isDetected ? input.whaleAlert.type : 'None'}
+        - MACD Histogram: ${input.macd?.hist.toFixed(4) || 'N/A'}
+        
+        Task:
+        Provide a concise, agentic summary (max 3 sentences).
+        1. Identify the strongest signal.
+        2. Assess the risk (Low/Medium/High).
+        3. Give a final verdict based on "Sirrin Crypto" principles (e.g., "Wait for confirmation", "Enter Long", "Take Profit").
+        
+        Output format: Text only, no markdown.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+            config: {
+                temperature: 0.5,
+                maxOutputTokens: 150,
+            }
+        });
+
+        return response.text || "Analysis unavailable.";
+    } catch (error) {
+        console.error("Deep Analysis Error:", error);
+        return "AI Agent offline. Rely on technical indicators.";
+    }
 };

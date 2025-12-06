@@ -71,6 +71,12 @@ export const translations: Translations = {
     settings: "Indicators",
     sent_analysis: "Sentiment Analysis",
     enable_sentiment: "Enable Sentiment",
+    
+    // Manual Fib
+    draw_fib: "Draw Fib",
+    reset_fib: "Reset Fib",
+    click_start: "Click Start Point (High/Low)",
+    click_end: "Click End Point",
   },
   ha: {
     // Navbar
@@ -135,5 +141,11 @@ export const translations: Translations = {
     settings: "Alamomi (Indicators)",
     sent_analysis: "Binciken Ra'ayi (Sentiment)",
     enable_sentiment: "Sanya Sentiment",
+    
+    // Manual Fib
+    draw_fib: "Zana Fib",
+    reset_fib: "Goge Fib",
+    click_start: "Danna Farko (Sama/Kasa)",
+    click_end: "Danna Karshe",
   }
 };
